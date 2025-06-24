@@ -169,28 +169,6 @@ function App() {
         };
     }
 
-    // On mouse up, apply rectangle fill or set selection
-    useEffect(() => {
-        const handleUp = () => {
-            if (mode === "rectangle") {
-                fillRectangle({ x1: 0, y1: 0, x2: cols - 1, y2: rows - 1 });
-            }
-            if (mode === "select") {
-                setSelection({
-                    start: { x: 0, y: 0 },
-                    end: { x: cols - 1, y: rows - 1 },
-                });
-            }
-            setMode("draw");
-        };
-        window.addEventListener("mouseup", handleUp);
-        window.addEventListener("mouseleave", handleUp);
-        return () => {
-            window.removeEventListener("mouseup", handleUp);
-            window.removeEventListener("mouseleave", handleUp);
-        };
-    }, [mode, cols, rows]);
-
     // Undo (command+z or ctrl+z)
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -275,24 +253,18 @@ function App() {
         [color, addColorToHistory]
     );
 
-    // Rectangle fill logic
+    // Rectangle fill logic (robust, only color selected area)
     function fillRectangle({ x1, y1, x2, y2 }) {
         setGrid((prev) => {
             const newGrid = prev.map((row) => row.map((cell) => ({ ...cell })));
-            const minX = Math.max(0, Math.min(x1, x2));
-            const maxX = Math.min(prev[0].length - 1, Math.max(x1, x2));
             const minY = Math.max(0, Math.min(y1, y2));
             const maxY = Math.min(prev.length - 1, Math.max(y1, y2));
+            const minX = Math.max(0, Math.min(x1, x2));
+            const maxX = Math.min(prev[0].length - 1, Math.max(x1, x2));
             let usedColor = false;
-            for (let y = 0; y < newGrid.length; y++) {
-                for (let x = 0; x < newGrid[0].length; x++) {
-                    if (
-                        x >= minX &&
-                        x <= maxX &&
-                        y >= minY &&
-                        y <= maxY &&
-                        newGrid[y][x].used
-                    ) {
+            for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    if (newGrid[y][x].used) {
                         newGrid[y][x].color = color;
                         usedColor = true;
                     }
