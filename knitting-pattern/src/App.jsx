@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import "./App.css";
 import React from "react";
+import PatternCanvas from "./PatternCanvas";
 
 const DEFAULT_COLS = 20;
 const DEFAULT_ROWS = 20;
@@ -60,57 +61,6 @@ function loadInitialState() {
 
 const initialState = loadInitialState();
 
-// Memoized cell component
-const PatternCell = React.memo(function PatternCell({
-    cell,
-    x,
-    y,
-    isInRectangle,
-    onMouseDown,
-    onMouseEnter,
-}) {
-    return (
-        <td
-            className={cell.used ? "used" : "unused"}
-            style={{
-                width: 24,
-                height: 24,
-                background: cell.used && cell.color ? cell.color : "#fff",
-                border: cell.used ? "1px solid #888" : "none",
-                cursor: cell.used
-                    ? isInRectangle
-                        ? "crosshair"
-                        : "pointer"
-                    : "not-allowed",
-                opacity: cell.used ? 1 : 0.1,
-                position: "relative",
-                textAlign: "center",
-                verticalAlign: "middle",
-                padding: 0,
-                boxShadow: isInRectangle
-                    ? `inset 0 0 0 2px #1976d2, 0 0 8px 2px #1976d255`
-                    : undefined,
-            }}
-            onMouseDown={onMouseDown}
-            onMouseEnter={onMouseEnter}
-        >
-            {!cell.used && (
-                <span
-                    style={{
-                        color: "#c00",
-                        fontWeight: "bold",
-                        fontSize: 18,
-                        pointerEvents: "none",
-                        userSelect: "none",
-                    }}
-                >
-                    ×
-                </span>
-            )}
-        </td>
-    );
-});
-
 function App() {
     const [cols, setCols] = useState(initialState.cols || DEFAULT_COLS);
     const [rows, setRows] = useState(initialState.rows || DEFAULT_ROWS);
@@ -123,20 +73,7 @@ function App() {
                   initialState.rows || DEFAULT_ROWS
               )
     );
-    const [isMouseDown, setIsMouseDown] = useState(false);
-    const [dragMode, setDragMode] = useState(null); // 'color' or 'unused' or 'rectangle' or 'select'
-    const [rectangleStart, setRectangleStart] = useState(null); // {x, y}
-    const [rectangleEnd, setRectangleEnd] = useState(null); // {x, y}
-    const [rectangleMode, setRectangleMode] = useState(
-        typeof initialState.rectangleMode === "boolean"
-            ? initialState.rectangleMode
-            : false
-    );
-    const [selectMode, setSelectMode] = useState(
-        typeof initialState.selectMode === "boolean"
-            ? initialState.selectMode
-            : false
-    );
+    const [mode, setMode] = useState("draw"); // 'draw' | 'rectangle' | 'select'
     const [selection, setSelection] = useState(initialState.selection || null);
     const [colorHistory, setColorHistory] = useState(
         Array.isArray(initialState.colorHistory)
@@ -149,6 +86,21 @@ function App() {
     });
     const appRef = useRef(null);
     const ignoreNextHistory = useRef(false); // To avoid double-push on undo
+    const [isPrintMode, setIsPrintMode] = useState(false);
+
+    // Add color to history only if used in grid
+    const addColorToHistory = useCallback((color, gridSnapshot) => {
+        if (
+            !gridSnapshot.some((row) =>
+                row.some((cell) => cell.color === color)
+            )
+        )
+            return;
+        setColorHistory((prev) => {
+            if (prev.includes(color)) return prev;
+            return [...prev, color].slice(-MAX_COLOR_HISTORY);
+        });
+    }, []);
 
     // Load from local storage
     useEffect(() => {
@@ -162,10 +114,6 @@ function App() {
             if (Array.isArray(state.colorHistory))
                 setColorHistory(state.colorHistory);
             if (state.selection) setSelection(state.selection);
-            if (typeof state.rectangleMode === "boolean")
-                setRectangleMode(state.rectangleMode);
-            if (typeof state.selectMode === "boolean")
-                setSelectMode(state.selectMode);
         }
     }, []);
 
@@ -180,20 +128,9 @@ function App() {
                 grid,
                 colorHistory,
                 selection,
-                rectangleMode,
-                selectMode,
             })
         );
-    }, [
-        cols,
-        rows,
-        color,
-        grid,
-        colorHistory,
-        selection,
-        rectangleMode,
-        selectMode,
-    ]);
+    }, [cols, rows, color, grid, colorHistory, selection]);
 
     // Save color history
     useEffect(() => {
@@ -210,19 +147,41 @@ function App() {
         setGrid((prev) => createEmptyGrid(cols, rows, prev));
     }, [cols, rows]);
 
-    // Mouse up handler for whole app
+    // Compute highlight area for rectangle or selection
+    let highlightArea = null;
+    if (mode === "rectangle") {
+        highlightArea = {
+            x1: 0,
+            y1: 0,
+            x2: cols - 1,
+            y2: rows - 1,
+            color: "#1976d2",
+            shadow: true,
+        };
+    } else if (mode === "select") {
+        highlightArea = {
+            x1: selection.start.x,
+            y1: selection.start.y,
+            x2: selection.end.x,
+            y2: selection.end.y,
+            color: "#1976d2",
+            shadow: true,
+        };
+    }
+
+    // On mouse up, apply rectangle fill or set selection
     useEffect(() => {
         const handleUp = () => {
-            if (rectangleMode && rectangleStart && rectangleEnd) {
-                fillRectangle(rectangleStart, rectangleEnd);
+            if (mode === "rectangle") {
+                fillRectangle({ x1: 0, y1: 0, x2: cols - 1, y2: rows - 1 });
             }
-            if (selectMode && rectangleStart && rectangleEnd) {
-                setSelection({ start: rectangleStart, end: rectangleEnd });
+            if (mode === "select") {
+                setSelection({
+                    start: { x: 0, y: 0 },
+                    end: { x: cols - 1, y: rows - 1 },
+                });
             }
-            setIsMouseDown(false);
-            setDragMode(null);
-            setRectangleStart(null);
-            setRectangleEnd(null);
+            setMode("draw");
         };
         window.addEventListener("mouseup", handleUp);
         window.addEventListener("mouseleave", handleUp);
@@ -230,7 +189,7 @@ function App() {
             window.removeEventListener("mouseup", handleUp);
             window.removeEventListener("mouseleave", handleUp);
         };
-    }, [rectangleMode, selectMode, rectangleStart, rectangleEnd]);
+    }, [mode, cols, rows]);
 
     // Undo (command+z or ctrl+z)
     useEffect(() => {
@@ -269,18 +228,71 @@ function App() {
         });
     };
 
-    // Fill rectangle with color
-    const fillRectangle = (start, end) => {
+    // Rectangle fill callback
+    const handleRectangleComplete = useCallback(
+        ({ x1, y1, x2, y2 }) => {
+            if (x1 == null || y1 == null || x2 == null || y2 == null) return;
+            fillRectangle({ x1, y1, x2, y2 });
+        },
+        [color, addColorToHistory]
+    );
+
+    // Selection callback
+    const handleSelectionComplete = useCallback(({ x1, y1, x2, y2 }) => {
+        setSelection({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 } });
+    }, []);
+
+    // Cell draw callback
+    const handleCellDraw = useCallback(
+        (x, y, e) => {
+            // Use the same logic as before for coloring/unused
+            setGrid((prev) => {
+                const row = prev[y];
+                const cell = row[x];
+                let usedColor = false;
+                let updatedCell = { ...cell };
+                if (e && e.shiftKey) {
+                    updatedCell.used = !updatedCell.used;
+                    if (!updatedCell.used) updatedCell.color = null;
+                } else if (updatedCell.used) {
+                    updatedCell.color = color;
+                    usedColor = true;
+                }
+                if (usedColor) addColorToHistory(color, prev);
+                if (
+                    updatedCell.used !== cell.used ||
+                    updatedCell.color !== cell.color
+                ) {
+                    const newRow = [...row];
+                    newRow[x] = updatedCell;
+                    const newGridArr = [...prev];
+                    newGridArr[y] = newRow;
+                    return newGridArr;
+                }
+                return prev;
+            });
+        },
+        [color, addColorToHistory]
+    );
+
+    // Rectangle fill logic
+    function fillRectangle({ x1, y1, x2, y2 }) {
         setGrid((prev) => {
             const newGrid = prev.map((row) => row.map((cell) => ({ ...cell })));
-            const x1 = Math.min(start.x, end.x);
-            const x2 = Math.max(start.x, end.x);
-            const y1 = Math.min(start.y, end.y);
-            const y2 = Math.max(start.y, end.y);
+            const minX = Math.max(0, Math.min(x1, x2));
+            const maxX = Math.min(prev[0].length - 1, Math.max(x1, x2));
+            const minY = Math.max(0, Math.min(y1, y2));
+            const maxY = Math.min(prev.length - 1, Math.max(y1, y2));
             let usedColor = false;
-            for (let y = y1; y <= y2; y++) {
-                for (let x = x1; x <= x2; x++) {
-                    if (newGrid[y][x].used) {
+            for (let y = 0; y < newGrid.length; y++) {
+                for (let x = 0; x < newGrid[0].length; x++) {
+                    if (
+                        x >= minX &&
+                        x <= maxX &&
+                        y >= minY &&
+                        y <= maxY &&
+                        newGrid[y][x].used
+                    ) {
                         newGrid[y][x].color = color;
                         usedColor = true;
                     }
@@ -289,11 +301,11 @@ function App() {
             if (usedColor) addColorToHistory(color, newGrid);
             return newGrid;
         });
-    };
+    }
 
     // Rotate selected area by 90 degrees clockwise
     const rotateSelection = () => {
-        if (!selection) return;
+        if (!selection || !selection.start || !selection.end) return;
         const { start, end } = selection;
         const x1 = Math.min(start.x, end.x);
         const x2 = Math.max(start.x, end.x);
@@ -322,130 +334,16 @@ function App() {
         });
     };
 
-    // Add color to history only if used in grid
-    const addColorToHistory = (color, gridSnapshot) => {
-        if (
-            !gridSnapshot.some((row) =>
-                row.some((cell) => cell.color === color)
-            )
-        )
-            return;
-        setColorHistory((prev) => {
-            if (prev.includes(color)) return prev;
-            return [...prev, color].slice(-MAX_COLOR_HISTORY);
-        });
-    };
-
-    // --- Optimize cell update: only update changed cell ---
-    const handleCellAction = useCallback(
-        (x, y, e, isDrag = false) => {
-            setGrid((prev) => {
-                const row = prev[y];
-                const cell = row[x];
-                let usedColor = false;
-                let updatedCell = { ...cell };
-
-                if ((e && e.shiftKey) || dragMode === "unused") {
-                    if (!isDrag) {
-                        updatedCell.used = !updatedCell.used;
-                        if (!updatedCell.used) updatedCell.color = null;
-                    } else {
-                        updatedCell.used = true;
-                    }
-                } else if (
-                    updatedCell.used &&
-                    (dragMode === "color" || !isDrag)
-                ) {
-                    updatedCell.color = color;
-                    usedColor = true;
-                }
-                if (usedColor) addColorToHistory(color, prev);
-
-                // Only update if changed
-                if (
-                    updatedCell.used !== cell.used ||
-                    updatedCell.color !== cell.color
-                ) {
-                    const newRow = [...row];
-                    newRow[x] = updatedCell;
-                    const newGridArr = [...prev];
-                    newGridArr[y] = newRow;
-                    return newGridArr;
-                }
-                return prev;
-            });
-        },
-        [color, dragMode, addColorToHistory]
-    );
-
-    const handleCellMouseDown = useCallback(
-        (x, y, e) => {
-            setIsMouseDown(true);
-            if (rectangleMode) {
-                setRectangleStart({ x, y });
-                setRectangleEnd({ x, y });
-                setDragMode("rectangle");
-            } else if (selectMode) {
-                setRectangleStart({ x, y });
-                setRectangleEnd({ x, y });
-                setDragMode("select");
-            } else if (e.shiftKey) {
-                setDragMode("unused");
-            } else {
-                setDragMode("color");
-            }
-            handleCellAction(x, y, e, false);
-        },
-        [rectangleMode, selectMode, handleCellAction]
-    );
-
-    const handleCellMouseEnter = useCallback(
-        (x, y, e) => {
-            if (isMouseDown) {
-                handleCellAction(x, y, e, true);
-            }
-        },
-        [isMouseDown, handleCellAction]
-    );
-
-    // Rectangle/selection highlight
-    const isInRectangle = (x, y) => {
-        if (rectangleMode && rectangleStart && rectangleEnd) {
-            const x1 = Math.min(rectangleStart.x, rectangleEnd.x);
-            const x2 = Math.max(rectangleStart.x, rectangleEnd.x);
-            const y1 = Math.min(rectangleStart.y, rectangleEnd.y);
-            const y2 = Math.max(rectangleStart.y, rectangleEnd.y);
-            return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-        }
-        if (selectMode && rectangleStart && rectangleEnd) {
-            const x1 = Math.min(rectangleStart.x, rectangleEnd.x);
-            const x2 = Math.max(rectangleStart.x, rectangleEnd.x);
-            const y1 = Math.min(rectangleStart.y, rectangleEnd.y);
-            const y2 = Math.max(rectangleStart.y, rectangleEnd.y);
-            return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-        }
-        if (selection) {
-            const { start, end } = selection;
-            const x1 = Math.min(start.x, end.x);
-            const x2 = Math.max(start.x, end.x);
-            const y1 = Math.min(start.y, end.y);
-            const y2 = Math.max(start.y, end.y);
-            return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-        }
-        return false;
-    };
-
     // Render grid
     const displayGrid = grid;
 
-    // Deselecting selection tool clears selection indicator
-    const handleSelectModeToggle = () => {
-        setSelectMode((m) => {
-            if (m) setSelection(null); // If turning off, clear selection
-            return !m;
-        });
-        setRectangleMode(false);
-    };
+    // Listen for print mode
+    useEffect(() => {
+        const mediaQuery = window.matchMedia("print");
+        const handleChange = (e) => setIsPrintMode(e.matches);
+        mediaQuery.addEventListener("change", handleChange);
+        return () => mediaQuery.removeEventListener("change", handleChange);
+    }, []);
 
     return (
         <div className="pattern-app-layout">
@@ -514,44 +412,53 @@ function App() {
                     <div className="menu-section">
                         <div className="menu-label">Tools</div>
                         <button
-                            onClick={() => {
-                                setRectangleMode((m) => !m);
-                                setSelectMode(false);
-                                setSelection(null);
-                            }}
-                            style={{
-                                background: rectangleMode
-                                    ? "#e0e0e0"
-                                    : undefined,
-                                fontWeight: rectangleMode ? "bold" : undefined,
-                            }}
-                        >
-                            {rectangleMode ? "Rectangle: ON" : "Draw Rectangle"}
-                        </button>
-                        <button
-                            onClick={handleSelectModeToggle}
-                            style={{
-                                background: selectMode ? "#e0e0e0" : undefined,
-                                fontWeight: selectMode ? "bold" : undefined,
-                            }}
-                        >
-                            {selectMode ? "Select: ON" : "Select Area"}
-                        </button>
-                        <button
-                            onClick={rotateSelection}
-                            disabled={!selection || !selectMode}
+                            onClick={() =>
+                                setMode(
+                                    mode === "rectangle" ? "draw" : "rectangle"
+                                )
+                            }
                             style={{
                                 background:
-                                    selection && selectMode
+                                    mode === "rectangle"
                                         ? "#e0e0e0"
                                         : undefined,
                                 fontWeight:
-                                    selection && selectMode
+                                    mode === "rectangle" ? "bold" : undefined,
+                            }}
+                        >
+                            {mode === "rectangle"
+                                ? "Rectangle: ON"
+                                : "Draw Rectangle"}
+                        </button>
+                        <button
+                            onClick={() =>
+                                setMode(mode === "select" ? "draw" : "select")
+                            }
+                            style={{
+                                background:
+                                    mode === "select" ? "#e0e0e0" : undefined,
+                                fontWeight:
+                                    mode === "select" ? "bold" : undefined,
+                            }}
+                        >
+                            {mode === "select" ? "Select: ON" : "Select Area"}
+                        </button>
+                        <button
+                            onClick={rotateSelection}
+                            disabled={!selection || mode !== "select"}
+                            style={{
+                                background:
+                                    selection && mode === "select"
+                                        ? "#e0e0e0"
+                                        : undefined,
+                                fontWeight:
+                                    selection && mode === "select"
                                         ? "bold"
                                         : undefined,
-                                opacity: selection && selectMode ? 1 : 0.5,
+                                opacity:
+                                    selection && mode === "select" ? 1 : 0.5,
                                 cursor:
-                                    selection && selectMode
+                                    selection && mode === "select"
                                         ? "pointer"
                                         : "not-allowed",
                             }}
@@ -580,32 +487,17 @@ function App() {
             </aside>
             <main className="pattern-main">
                 <div className="pattern-grid-wrapper">
-                    <table
-                        className="pattern-grid"
-                        style={{ borderCollapse: "collapse" }}
-                    >
-                        <tbody>
-                            {displayGrid.slice(0, rows).map((row, y) => (
-                                <tr key={y}>
-                                    {row.slice(0, cols).map((cell, x) => (
-                                        <PatternCell
-                                            key={x}
-                                            cell={cell}
-                                            x={x}
-                                            y={y}
-                                            isInRectangle={isInRectangle(x, y)}
-                                            onMouseDown={(e) =>
-                                                handleCellMouseDown(x, y, e)
-                                            }
-                                            onMouseEnter={(e) =>
-                                                handleCellMouseEnter(x, y, e)
-                                            }
-                                        />
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <PatternCanvas
+                        grid={displayGrid}
+                        rows={rows}
+                        cols={cols}
+                        cellSize={24}
+                        mode={mode}
+                        onRectangleComplete={handleRectangleComplete}
+                        onSelectionComplete={handleSelectionComplete}
+                        onCellDraw={handleCellDraw}
+                        isPrintMode={isPrintMode}
+                    />
                 </div>
                 <div className="print-hint">
                     To print, use your browser's print function. Unused cells
