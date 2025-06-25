@@ -147,28 +147,6 @@ function App() {
         setGrid((prev) => createEmptyGrid(cols, rows, prev));
     }, [cols, rows]);
 
-    // Compute highlight area for rectangle or selection
-    let highlightArea = null;
-    if (mode === "rectangle") {
-        highlightArea = {
-            x1: 0,
-            y1: 0,
-            x2: cols - 1,
-            y2: rows - 1,
-            color: "#1976d2",
-            shadow: true,
-        };
-    } else if (mode === "select") {
-        highlightArea = {
-            x1: selection.start.x,
-            y1: selection.start.y,
-            x2: selection.end.x,
-            y2: selection.end.y,
-            color: "#1976d2",
-            shadow: true,
-        };
-    }
-
     // Undo (command+z or ctrl+z)
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -309,6 +287,27 @@ function App() {
     // Render grid
     const displayGrid = grid;
 
+    // Compute highlight area for rectangle or selection
+    let highlightArea = null;
+    if (mode === "rectangle") {
+        // Rectangle drag highlight is handled internally by PatternCanvas
+        highlightArea = null;
+    } else if (
+        mode === "select" &&
+        selection &&
+        selection.start &&
+        selection.end
+    ) {
+        highlightArea = {
+            x1: selection.start.x,
+            y1: selection.start.y,
+            x2: selection.end.x,
+            y2: selection.end.y,
+            color: "#1976d2",
+            shadow: true,
+        };
+    }
+
     // Listen for print mode
     useEffect(() => {
         const mediaQuery = window.matchMedia("print");
@@ -316,6 +315,13 @@ function App() {
         mediaQuery.addEventListener("change", handleChange);
         return () => mediaQuery.removeEventListener("change", handleChange);
     }, []);
+
+    // Clear selection when leaving select mode
+    useEffect(() => {
+        if (mode !== "select" && selection) {
+            setSelection(null);
+        }
+    }, [mode]);
 
     return (
         <div className="pattern-app-layout">
@@ -417,20 +423,39 @@ function App() {
                         </button>
                         <button
                             onClick={rotateSelection}
-                            disabled={!selection || mode !== "select"}
+                            disabled={
+                                !selection ||
+                                !selection.start ||
+                                !selection.end ||
+                                mode !== "select"
+                            }
                             style={{
                                 background:
-                                    selection && mode === "select"
+                                    selection &&
+                                    selection.start &&
+                                    selection.end &&
+                                    mode === "select"
                                         ? "#e0e0e0"
                                         : undefined,
                                 fontWeight:
-                                    selection && mode === "select"
+                                    selection &&
+                                    selection.start &&
+                                    selection.end &&
+                                    mode === "select"
                                         ? "bold"
                                         : undefined,
                                 opacity:
-                                    selection && mode === "select" ? 1 : 0.5,
+                                    selection &&
+                                    selection.start &&
+                                    selection.end &&
+                                    mode === "select"
+                                        ? 1
+                                        : 0.5,
                                 cursor:
-                                    selection && mode === "select"
+                                    selection &&
+                                    selection.start &&
+                                    selection.end &&
+                                    mode === "select"
                                         ? "pointer"
                                         : "not-allowed",
                             }}
@@ -469,6 +494,7 @@ function App() {
                         onSelectionComplete={handleSelectionComplete}
                         onCellDraw={handleCellDraw}
                         isPrintMode={isPrintMode}
+                        highlightArea={highlightArea}
                     />
                 </div>
                 <div className="print-hint">

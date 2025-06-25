@@ -23,6 +23,7 @@ const PatternCanvas = ({
     onSelectionComplete,
     onCellDraw,
     isPrintMode = false,
+    highlightArea,
 }) => {
     const canvasRef = useRef(null);
     const mouseDownRef = useRef(false);
@@ -102,7 +103,41 @@ const PatternCanvas = ({
             ctx.strokeRect(left + 1, top + 1, width - 2, height - 2);
             ctx.restore();
         }
-    }, [grid, rows, cols, cellSize, dragStart, dragCurrent, mode, isPrintMode]);
+        // Draw highlightArea if provided (for selection mode)
+        if (highlightArea) {
+            const {
+                x1,
+                y1,
+                x2,
+                y2,
+                color = "#1976d2",
+                shadow = true,
+            } = highlightArea;
+            const left = Math.min(x1, x2) * cellSize;
+            const top = Math.min(y1, y2) * cellSize;
+            const width = (Math.abs(x2 - x1) + 1) * cellSize;
+            const height = (Math.abs(y2 - y1) + 1) * cellSize;
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            if (shadow) {
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 4;
+            }
+            ctx.strokeRect(left + 1, top + 1, width - 2, height - 2);
+            ctx.restore();
+        }
+    }, [
+        grid,
+        rows,
+        cols,
+        cellSize,
+        dragStart,
+        dragCurrent,
+        mode,
+        isPrintMode,
+        highlightArea,
+    ]);
 
     // Mouse event handlers (pointer events for robustness)
     useEffect(() => {
