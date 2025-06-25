@@ -38,6 +38,8 @@ const PatternCanvas = ({
     onCellDraw,
     isPrintMode = false,
     highlightArea,
+    onDrawStart,
+    onDrawEnd,
 }) => {
     const canvasRef = useRef(null);
     const mouseDownRef = useRef(false);
@@ -209,6 +211,7 @@ const PatternCanvas = ({
             setDragStart(cell);
             setDragCurrent(cell);
             if (mode === "draw") {
+                if (onDrawStart) onDrawStart();
                 onCellDraw && onCellDraw(cell.x, cell.y, e);
             }
         }
@@ -230,6 +233,9 @@ const PatternCanvas = ({
         function handlePointerUp(e) {
             if (!mouseDownRef.current) return;
             mouseDownRef.current = false;
+            if (mode === "draw") {
+                if (onDrawEnd) onDrawEnd();
+            }
             if (dragStart && dragCurrent) {
                 if (mode === "rectangle" && onRectangleComplete) {
                     onRectangleComplete({
@@ -269,6 +275,8 @@ const PatternCanvas = ({
         isPrintMode,
         dragStart,
         dragCurrent,
+        onDrawStart,
+        onDrawEnd,
     ]);
 
     return (

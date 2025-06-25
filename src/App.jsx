@@ -52,6 +52,8 @@ function App() {
     const ignoreNextHistory = useRef(false); // To avoid double-push on undo
     const [isPrintMode, setIsPrintMode] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const batchingDrawRef = useRef(false); // NEW: track if batching draw
+    const gridBeforeDrawRef = useRef(null); // NEW: store grid before draw
 
     // Helper to detect mobile
     const isMobile =
@@ -156,6 +158,7 @@ function App() {
 
     // Push to history on grid change (except when undoing/redoing)
     useEffect(() => {
+        if (batchingDrawRef.current) return; // NEW: skip during draw
         if (ignoreNextHistory.current) {
             ignoreNextHistory.current = false;
             return;
@@ -350,6 +353,21 @@ function App() {
         }
     }, [mode]);
 
+    // NEW: handle draw start/end for batching history
+    const handleDrawStart = useCallback(() => {
+        batchingDrawRef.current = true;
+        gridBeforeDrawRef.current = deepCloneGrid(grid);
+    }, [grid]);
+    const handleDrawEnd = useCallback(() => {
+        batchingDrawRef.current = false;
+        setHistory((prev) => {
+            const newHist = [...prev, grid];
+            if (newHist.length > MAX_HISTORY) newHist.shift();
+            return newHist;
+        });
+        setRedoStack([]);
+    }, [grid]);
+
     return (
         <div className="pattern-app-layout">
             {isMobile && !isMenuOpen && (
@@ -424,6 +442,8 @@ function App() {
                         onCellDraw={handleCellDraw}
                         isPrintMode={isPrintMode}
                         highlightArea={highlightArea}
+                        onDrawStart={handleDrawStart}
+                        onDrawEnd={handleDrawEnd}
                     />
                 </div>
                 <div className="print-hint">
