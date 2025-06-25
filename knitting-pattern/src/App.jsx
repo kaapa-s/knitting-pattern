@@ -84,6 +84,10 @@ function App() {
         const saved = localStorage.getItem(HISTORY_KEY);
         return saved ? JSON.parse(saved) : [];
     });
+    const [redoStack, setRedoStack] = useState(() => {
+        const saved = localStorage.getItem("knitting-pattern-redo-v1");
+        return saved ? JSON.parse(saved) : [];
+    });
     const appRef = useRef(null);
     const ignoreNextHistory = useRef(false); // To avoid double-push on undo
     const [isPrintMode, setIsPrintMode] = useState(false);
@@ -137,39 +141,64 @@ function App() {
         localStorage.setItem(COLOR_HISTORY_KEY, JSON.stringify(colorHistory));
     }, [colorHistory]);
 
-    // Save command history
+    // Save command history (async, only when history changes)
     useEffect(() => {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        // Save a deep clone to localStorage, but do it asynchronously
+        const timeout = setTimeout(() => {
+            localStorage.setItem(
+                HISTORY_KEY,
+                JSON.stringify(history.map(deepCloneGrid))
+            );
+        }, 0);
+        return () => clearTimeout(timeout);
     }, [history]);
+
+    // Save redo stack (async, only when redoStack changes)
+    useEffect(() => {
+        const timeout = setTimeout(() => {
+            localStorage.setItem(
+                "knitting-pattern-redo-v1",
+                JSON.stringify(redoStack.map(deepCloneGrid))
+            );
+        }, 0);
+        return () => clearTimeout(timeout);
+    }, [redoStack]);
 
     // Handle grid resize
     useEffect(() => {
         setGrid((prev) => createEmptyGrid(cols, rows, prev));
     }, [cols, rows]);
 
-    // Undo (command+z or ctrl+z)
+    // Undo (command+z or ctrl+z) and Redo (command+y or ctrl+y)
     useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
                 e.preventDefault();
                 undo();
+            } else if (
+                (e.metaKey || e.ctrlKey) &&
+                e.key.toLowerCase() === "y"
+            ) {
+                e.preventDefault();
+                redo();
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     });
 
-    // Push to history on grid change (except when undoing)
+    // Push to history on grid change (except when undoing/redoing)
     useEffect(() => {
         if (ignoreNextHistory.current) {
             ignoreNextHistory.current = false;
             return;
         }
         setHistory((prev) => {
-            const newHist = [...prev, deepCloneGrid(grid)];
+            const newHist = [...prev, grid]; // store by reference
             if (newHist.length > MAX_HISTORY) newHist.shift();
             return newHist;
         });
+        setRedoStack([]); // Clear redo stack on new action
         // eslint-disable-next-line
     }, [grid]);
 
@@ -179,8 +208,23 @@ function App() {
             if (prev.length < 2) return prev;
             const newHist = prev.slice(0, -1);
             ignoreNextHistory.current = true;
-            setGrid(deepCloneGrid(newHist[newHist.length - 1]));
+            setRedoStack((redoPrev) => [prev[prev.length - 1], ...redoPrev]);
+            setGrid(newHist[newHist.length - 1]); // set by reference, no deep clone
             return newHist;
+        });
+    };
+
+    // Redo function
+    const redo = () => {
+        setRedoStack((redoPrev) => {
+            if (redoPrev.length === 0) return redoPrev;
+            const [next, ...rest] = redoPrev;
+            setHistory((prev) => {
+                ignoreNextHistory.current = true;
+                setGrid(next); // set by reference, no deep clone
+                return [...prev, next];
+            });
+            return rest;
         });
     };
 
@@ -253,7 +297,7 @@ function App() {
         });
     }
 
-    // Rotate selected area by 90 degrees clockwise
+    // Rotate selected area by 90 degrees clockwise around its center
     const rotateSelection = () => {
         if (!selection || !selection.start || !selection.end) return;
         const { start, end } = selection;
@@ -263,24 +307,40 @@ function App() {
         const y2 = Math.max(start.y, end.y);
         const selWidth = x2 - x1 + 1;
         const selHeight = y2 - y1 + 1;
+        // Check bounds for rotated area
         if (x1 + selHeight - 1 >= cols || y1 + selWidth - 1 >= rows) return;
-        const area = [];
-        for (let y = y1; y <= y2; y++) {
-            const row = [];
-            for (let x = x1; x <= x2; x++) {
-                row.push({ ...grid[y][x] });
-            }
-            area.push(row);
-        }
-        const rotated = rotateMatrix90(area);
+        // Extract the area (including all cells, used or not)
+        const area = Array.from({ length: selHeight }, (_, y) =>
+            Array.from({ length: selWidth }, (_, x) => grid[y1 + y][x1 + x])
+        );
+        // Rotate the area (matrix) 90deg clockwise: (x, y) -> (y, width-1-x)
+        const rotated = Array.from({ length: selWidth }, (_, y) =>
+            Array.from(
+                { length: selHeight },
+                (_, x) => area[selHeight - 1 - x][y]
+            )
+        );
+        // Place rotated area back into the grid, preserving the bounding box
         setGrid((prev) => {
             const newGrid = prev.map((row) => row.map((cell) => ({ ...cell })));
-            for (let y = 0; y < rotated.length; y++) {
-                for (let x = 0; x < rotated[0].length; x++) {
-                    newGrid[y1 + y][x1 + x] = { ...rotated[y][x] };
+            for (let y = 0; y < selWidth; y++) {
+                for (let x = 0; x < selHeight; x++) {
+                    if (
+                        y1 + y < newGrid.length &&
+                        x1 + x < newGrid[0].length &&
+                        rotated[y] &&
+                        rotated[y][x]
+                    ) {
+                        newGrid[y1 + y][x1 + x] = { ...rotated[y][x] };
+                    }
                 }
             }
             return newGrid;
+        });
+        // Update selection highlight to match new rotated area
+        setSelection({
+            start: { x: x1, y: y1 },
+            end: { x: x1 + selHeight - 1, y: y1 + selWidth - 1 },
         });
     };
 
@@ -475,6 +535,20 @@ function App() {
                             title="Undo (Cmd/Ctrl+Z)"
                         >
                             Undo
+                        </button>
+                        <button
+                            onClick={redo}
+                            disabled={redoStack.length === 0}
+                            style={{
+                                opacity: redoStack.length === 0 ? 0.5 : 1,
+                                cursor:
+                                    redoStack.length === 0
+                                        ? "not-allowed"
+                                        : "pointer",
+                            }}
+                            title="Redo (Cmd/Ctrl+Y)"
+                        >
+                            Redo
                         </button>
                     </div>
                     <span style={{ marginTop: 8, fontSize: 12 }}>
