@@ -1,8 +1,10 @@
 #root {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 2rem;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
     text-align: center;
+    box-sizing: border-box;
 }
 
 .logo {
@@ -43,11 +45,13 @@
 
 /* App layout */
 .pattern-app {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 1.5rem;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
     font-family: system-ui, sans-serif;
     text-align: center;
+    box-sizing: border-box;
 }
 
 .controls {
@@ -166,13 +170,16 @@
     display: flex;
     min-height: 100vh;
     background: #f8f8f8;
+    align-items: stretch;
 }
 .pattern-sidebar {
     position: sticky;
     top: 0;
+    left: 0;
     align-self: flex-start;
-    min-width: 150px;
-    max-width: 180px;
+    min-width: 220px;
+    max-width: 260px;
+    width: 220px;
     background: #fff;
     border-right: 1px solid #e0e0e0;
     padding: 1.2rem 0.7rem 1.2rem 1.1rem;
@@ -181,6 +188,7 @@
     display: flex;
     flex-direction: column;
     gap: 2rem;
+    box-shadow: 2px 0 8px #0001;
 }
 .pattern-main {
     flex: 1;
@@ -189,16 +197,19 @@
     align-items: center;
     justify-content: flex-start;
     padding: 2rem 0 2rem 0;
+    min-width: 0;
 }
 .pattern-grid-wrapper {
     overflow-x: auto;
     margin: 0 auto 1rem auto;
     background: #f8f8f8;
-    padding: 1rem;
-    border-radius: 8px;
+    padding: 1.5rem 2.5rem;
+    border-radius: 12px;
     box-shadow: 0 2px 8px #0001;
     max-width: 100vw;
-    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 .trim-handle {
     position: absolute;
@@ -339,6 +350,17 @@
 }
 
 /* Mobile menu overlay and button */
+@media (max-width: 1100px) {
+    .pattern-sidebar {
+        min-width: 150px;
+        max-width: 180px;
+        width: 150px;
+        padding: 1.2rem 0.5rem 1.2rem 0.7rem;
+    }
+    .pattern-grid-wrapper {
+        padding: 1rem 0.5rem;
+    }
+}
 @media (max-width: 700px) {
     .pattern-app-layout {
         flex-direction: column;
