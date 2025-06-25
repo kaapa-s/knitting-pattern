@@ -32,10 +32,11 @@ const PatternCanvas = ({
     rows,
     cols,
     cellSize = 24,
-    mode = "draw", // 'draw' | 'rectangle' | 'select'
+    mode = "draw", // 'draw' | 'rectangle' | 'select' | 'exclude'
     onRectangleComplete,
     onSelectionComplete,
     onCellDraw,
+    onCellExclude,
     isPrintMode = false,
     highlightArea,
     onDrawStart,
@@ -45,6 +46,7 @@ const PatternCanvas = ({
     const mouseDownRef = useRef(false);
     const [dragStart, setDragStart] = useState(null); // {x, y}
     const [dragCurrent, setDragCurrent] = useState(null); // {x, y}
+    const excludedCellsRef = useRef(new Set());
 
     // Calculate print size if print mode
     let printWidthPx = null;
@@ -198,6 +200,9 @@ const PatternCanvas = ({
         if (isPrintMode) return; // No interaction in print mode
         const canvas = canvasRef.current;
         if (!canvas) return;
+        function cellKey(x, y) {
+            return `${x},${y}`;
+        }
         function handlePointerDown(e) {
             const cell = getCellAtMouse(
                 e,
@@ -212,7 +217,17 @@ const PatternCanvas = ({
             setDragCurrent(cell);
             if (mode === "draw") {
                 if (onDrawStart) onDrawStart();
-                onCellDraw && onCellDraw(cell.x, cell.y, e);
+                if (e.shiftKey) {
+                    // Start straight line
+                    onCellDraw && onCellDraw(cell.x, cell.y, e, true); // true = isLine
+                } else {
+                    onCellDraw && onCellDraw(cell.x, cell.y, e);
+                }
+            } else if (mode === "exclude") {
+                excludedCellsRef.current = new Set();
+                const key = cellKey(cell.x, cell.y);
+                excludedCellsRef.current.add(key);
+                onCellExclude && onCellExclude(cell.x, cell.y, e);
             }
         }
         function handlePointerMove(e) {
@@ -227,12 +242,25 @@ const PatternCanvas = ({
             if (!cell) return;
             setDragCurrent(cell);
             if (mode === "draw") {
-                onCellDraw && onCellDraw(cell.x, cell.y, e);
+                if (e.shiftKey && dragStart) {
+                    // Draw straight line from dragStart to cell
+                    onCellDraw &&
+                        onCellDraw(dragStart.x, dragStart.y, e, true, cell);
+                } else {
+                    onCellDraw && onCellDraw(cell.x, cell.y, e);
+                }
+            } else if (mode === "exclude") {
+                const key = cellKey(cell.x, cell.y);
+                if (!excludedCellsRef.current.has(key)) {
+                    excludedCellsRef.current.add(key);
+                    onCellExclude && onCellExclude(cell.x, cell.y, e);
+                }
             }
         }
         function handlePointerUp(e) {
             if (!mouseDownRef.current) return;
             mouseDownRef.current = false;
+            excludedCellsRef.current = new Set();
             if (mode === "draw") {
                 if (onDrawEnd) onDrawEnd();
             }
@@ -267,6 +295,7 @@ const PatternCanvas = ({
     }, [
         mode,
         onCellDraw,
+        onCellExclude,
         onRectangleComplete,
         onSelectionComplete,
         effectiveCellSize,

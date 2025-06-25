@@ -21,7 +21,7 @@ function App() {
     const [cols, setCols] = useState(initialState.cols || DEFAULT_COLS);
     const [rows, setRows] = useState(initialState.rows || DEFAULT_ROWS);
     const [color, setColor] = useState(initialState.color || DEFAULT_COLOR);
-    const [mode, setMode] = useState("draw"); // 'draw' | 'rectangle' | 'select'
+    const [mode, setMode] = useState("draw"); // 'draw' | 'rectangle' | 'select' | 'exclude'
     const [colorHistory, setColorHistory] = useState(
         Array.isArray(initialState.colorHistory)
             ? initialState.colorHistory
@@ -71,6 +71,7 @@ function App() {
         handleCellDraw,
         rotateSelection,
         handleSelectionComplete,
+        handleCellExclude,
     } = useDrawingManager({
         initialGrid:
             initialState.grid ||
@@ -260,6 +261,9 @@ function App() {
                         onRectangleComplete={handleRectangleComplete}
                         onSelectionComplete={handleSelectionComplete}
                         onCellDraw={handleCellDraw}
+                        onCellExclude={
+                            mode === "exclude" ? handleCellExclude : null
+                        }
                         isPrintMode={isPrintMode}
                         highlightArea={highlightArea}
                         onDrawStart={handleDrawStart}

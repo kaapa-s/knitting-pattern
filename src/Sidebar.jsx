@@ -189,6 +189,19 @@ function Sidebar({
                     </button>
                     <button
                         onClick={() => {
+                            setMode(mode === "exclude" ? "draw" : "exclude");
+                            if (isMobile) setIsMenuOpen(false);
+                        }}
+                        style={{
+                            background:
+                                mode === "exclude" ? "#e0e0e0" : undefined,
+                            fontWeight: mode === "exclude" ? "bold" : undefined,
+                        }}
+                    >
+                        {mode === "exclude" ? "Exclude: ON" : "Exclude Cells"}
+                    </button>
+                    <button
+                        onClick={() => {
                             undo();
                             if (isMobile) setIsMenuOpen(false);
                         }}
@@ -221,7 +234,8 @@ function Sidebar({
                     </button>
                 </div>
                 <span style={{ marginTop: 8, fontSize: 12 }}>
-                    (Shift+Click or Shift+Drag to mark as unused/used)
+                    (Use Exclude mode to mark cells as unused/used. Shift+Draw
+                    now draws straight lines.)
                 </span>
             </div>
         </>

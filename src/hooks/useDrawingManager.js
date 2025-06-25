@@ -40,35 +40,96 @@ export default function useDrawingManager({
 
     // Cell draw logic
     const handleCellDraw = useCallback(
-        (x, y, e) => {
+        (x, y, e, isLine = false, endCell = null) => {
             setGrid((prev) => {
-                const row = prev[y];
-                const cell = row[x];
-                let usedColor = false;
-                let updatedCell = { ...cell };
-                if (e && e.shiftKey) {
-                    updatedCell.used = !updatedCell.used;
-                    if (!updatedCell.used) updatedCell.color = null;
-                } else if (updatedCell.used) {
-                    updatedCell.color = color;
-                    usedColor = true;
-                }
-                if (usedColor) addColorToHistory(color, prev);
-                if (
-                    updatedCell.used !== cell.used ||
-                    updatedCell.color !== cell.color
-                ) {
-                    const newRow = [...row];
-                    newRow[x] = updatedCell;
-                    const newGridArr = [...prev];
-                    newGridArr[y] = newRow;
+                let newGridArr = prev.map((row) =>
+                    row.map((cell) => ({ ...cell }))
+                );
+                if (isLine && endCell) {
+                    // Draw a straight line from (x, y) to (endCell.x, endCell.y)
+                    const points = getLinePoints(x, y, endCell.x, endCell.y);
+                    let usedColor = false;
+                    for (const pt of points) {
+                        const row = newGridArr[pt.y];
+                        const cell = row[pt.x];
+                        if (cell.used) {
+                            row[pt.x] = { ...cell, color };
+                            usedColor = true;
+                        }
+                    }
+                    if (usedColor) addColorToHistory(color, newGridArr);
                     return newGridArr;
+                } else {
+                    const row = newGridArr[y];
+                    const cell = row[x];
+                    let usedColor = false;
+                    let updatedCell = { ...cell };
+                    if (updatedCell.used) {
+                        updatedCell.color = color;
+                        usedColor = true;
+                    }
+                    if (usedColor) addColorToHistory(color, newGridArr);
+                    if (
+                        updatedCell.used !== cell.used ||
+                        updatedCell.color !== cell.color
+                    ) {
+                        row[x] = updatedCell;
+                        return newGridArr;
+                    }
+                    return prev;
                 }
-                return prev;
             });
         },
         [color, addColorToHistory]
     );
+
+    // Exclude cell logic
+    const handleCellExclude = useCallback((x, y, e) => {
+        setGrid((prev) => {
+            const row = prev[y];
+            const cell = row[x];
+            let updatedCell = { ...cell };
+            updatedCell.used = !updatedCell.used;
+            if (!updatedCell.used) updatedCell.color = null;
+            if (
+                updatedCell.used !== cell.used ||
+                updatedCell.color !== cell.color
+            ) {
+                const newRow = [...row];
+                newRow[x] = updatedCell;
+                const newGridArr = [...prev];
+                newGridArr[y] = newRow;
+                return newGridArr;
+            }
+            return prev;
+        });
+    }, []);
+
+    // Helper for line points (Bresenham's algorithm)
+    function getLinePoints(x0, y0, x1, y1) {
+        const points = [];
+        const dx = Math.abs(x1 - x0);
+        const dy = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1;
+        const sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+        let x = x0;
+        let y = y0;
+        while (true) {
+            points.push({ x, y });
+            if (x === x1 && y === y1) break;
+            const e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                x += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                y += sy;
+            }
+        }
+        return points;
+    }
 
     // Rotate selection logic
     const rotateSelection = useCallback(() => {
@@ -124,6 +185,7 @@ export default function useDrawingManager({
         setSelection,
         fillRectangle,
         handleCellDraw,
+        handleCellExclude,
         rotateSelection,
         handleSelectionComplete,
     };
