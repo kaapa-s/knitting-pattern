@@ -91,6 +91,13 @@ function App() {
     const appRef = useRef(null);
     const ignoreNextHistory = useRef(false); // To avoid double-push on undo
     const [isPrintMode, setIsPrintMode] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    // Helper to detect mobile
+    const isMobile =
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(max-width: 700px)").matches;
 
     // Add color to history only if used in grid
     const addColorToHistory = useCallback((color, gridSnapshot) => {
@@ -385,7 +392,63 @@ function App() {
 
     return (
         <div className="pattern-app-layout">
-            <aside className="pattern-sidebar">
+            {isMobile && !isMenuOpen && (
+                <button
+                    className="mobile-menu-btn"
+                    aria-label="Open menu"
+                    onClick={() => setIsMenuOpen(true)}
+                    style={{
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        alignItems: "center",
+                    }}
+                >
+                    <span
+                        style={{
+                            display: "block",
+                            fontSize: "1rem",
+                            color: "#222",
+                            background: "rgba(255,255,255,0.92)",
+                            borderRadius: "8px",
+                            padding: "8px 18px 10px 18px",
+                            fontWeight: 500,
+                            letterSpacing: "0.01em",
+                            lineHeight: 1.1,
+                        }}
+                    >
+                        Open menu
+                    </span>
+                </button>
+            )}
+            <aside
+                className={
+                    isMobile
+                        ? `pattern-sidebar${isMenuOpen ? " menu-open" : ""}`
+                        : "pattern-sidebar"
+                }
+                style={
+                    isMobile && !isMenuOpen ? { display: "none" } : undefined
+                }
+            >
+                {isMobile && (
+                    <button
+                        style={{
+                            position: "absolute",
+                            top: 12,
+                            right: 16,
+                            zIndex: 201,
+                            background: "none",
+                            border: "none",
+                            fontSize: 32,
+                            color: "#333",
+                            cursor: "pointer",
+                        }}
+                        aria-label="Close menu"
+                        onClick={() => setIsMenuOpen(false)}
+                    >
+                        ×
+                    </button>
+                )}
                 <div className="controls">
                     <div className="menu-section">
                         <div className="menu-label">Canvas Size</div>
@@ -398,6 +461,7 @@ function App() {
                                 value={cols}
                                 onChange={(e) => {
                                     setCols(Number(e.target.value));
+                                    if (isMobile) setIsMenuOpen(false);
                                 }}
                             />
                         </label>
@@ -410,6 +474,7 @@ function App() {
                                 value={rows}
                                 onChange={(e) => {
                                     setRows(Number(e.target.value));
+                                    if (isMobile) setIsMenuOpen(false);
                                 }}
                             />
                         </label>
@@ -421,7 +486,10 @@ function App() {
                             <input
                                 type="color"
                                 value={color}
-                                onChange={(e) => setColor(e.target.value)}
+                                onChange={(e) => {
+                                    setColor(e.target.value);
+                                    if (isMobile) setIsMenuOpen(false);
+                                }}
                             />
                         </label>
                         <div className="color-history color-history-wrap">
@@ -442,7 +510,10 @@ function App() {
                                         cursor: "pointer",
                                     }}
                                     title={c}
-                                    onClick={() => setColor(c)}
+                                    onClick={() => {
+                                        setColor(c);
+                                        if (isMobile) setIsMenuOpen(false);
+                                    }}
                                 />
                             ))}
                         </div>
@@ -450,11 +521,12 @@ function App() {
                     <div className="menu-section">
                         <div className="menu-label">Tools</div>
                         <button
-                            onClick={() =>
+                            onClick={() => {
                                 setMode(
                                     mode === "rectangle" ? "draw" : "rectangle"
-                                )
-                            }
+                                );
+                                if (isMobile) setIsMenuOpen(false);
+                            }}
                             style={{
                                 background:
                                     mode === "rectangle"
@@ -469,9 +541,10 @@ function App() {
                                 : "Draw Rectangle"}
                         </button>
                         <button
-                            onClick={() =>
-                                setMode(mode === "select" ? "draw" : "select")
-                            }
+                            onClick={() => {
+                                setMode(mode === "select" ? "draw" : "select");
+                                if (isMobile) setIsMenuOpen(false);
+                            }}
                             style={{
                                 background:
                                     mode === "select" ? "#e0e0e0" : undefined,
@@ -482,7 +555,10 @@ function App() {
                             {mode === "select" ? "Select: ON" : "Select Area"}
                         </button>
                         <button
-                            onClick={rotateSelection}
+                            onClick={() => {
+                                rotateSelection();
+                                if (isMobile) setIsMenuOpen(false);
+                            }}
                             disabled={
                                 !selection ||
                                 !selection.start ||
@@ -523,7 +599,10 @@ function App() {
                             Rotate Selection 90°
                         </button>
                         <button
-                            onClick={undo}
+                            onClick={() => {
+                                undo();
+                                if (isMobile) setIsMenuOpen(false);
+                            }}
                             disabled={history.length < 2}
                             style={{
                                 opacity: history.length < 2 ? 0.5 : 1,
@@ -537,7 +616,10 @@ function App() {
                             Undo
                         </button>
                         <button
-                            onClick={redo}
+                            onClick={() => {
+                                redo();
+                                if (isMobile) setIsMenuOpen(false);
+                            }}
                             disabled={redoStack.length === 0}
                             style={{
                                 opacity: redoStack.length === 0 ? 0.5 : 1,
